@@ -274,6 +274,11 @@ class Explosion(pygame.sprite.Sprite):
                 self.image = self.frames[self.current_frame]
                 self.rect = self.image.get_rect(center=center)
 
+class FinalEnemy(pygame.sprite.Sprite):
+    def __init__(self, x: int, y: int):
+        self.x = x
+        self.y = y
+
 
 # --- 星（背景）の管理 (Star Background Management) ---
 def create_stars(number):
