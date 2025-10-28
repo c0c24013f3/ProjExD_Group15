@@ -1,5 +1,5 @@
-import os
-import pygame as pg
+import pygame
+import sys
 import random
 import os # osモジュールをインポート
 import math # 角度計算のために math をインポート
@@ -12,8 +12,6 @@ fig_dir = os.path.join(script_dir, "fig")
 SCREEN_WIDTH = 600
 SCREEN_HEIGHT = 600
 FPS = 60
-
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # 色 (Colors)
 WHITE = (255, 255, 255)
@@ -78,7 +76,7 @@ except pygame.error as e:
 
 
 # --- プレイヤー クラス (Player Class) ---
-class Player(pg.sprite.Sprite):
+class Player(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
         self.image = pygame.transform.scale(PLAYER_IMAGE, (40, 40)) 
@@ -95,10 +93,10 @@ class Player(pg.sprite.Sprite):
             return
 
         self.speed_x = 0
-        keys = pg.key.get_pressed()
-        if keys[pg.K_LEFT]:
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_LEFT]:
             self.speed_x = -7
-        if keys[pg.K_RIGHT]:
+        if keys[pygame.K_RIGHT]:
             self.speed_x = 7
         
         self.rect.x += self.speed_x
@@ -344,8 +342,8 @@ while running:
     clock.tick(FPS)
 
     # 2. イベント処理 (Event handling)
-    for event in pg.event.get():
-        if event.type == pg.QUIT:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
             running = False
         elif event.type == ADD_ENEMY and not game_over:
             # Enemy生成時に player オブジェクトを渡す
@@ -434,9 +432,9 @@ while running:
         draw_text(screen, "GAME OVER", game_over_font, RED, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, align="center")
 
     # 6. 画面のフリップ (Flip display)
-    pg.display.flip()
+    pygame.display.flip()
 
 # --- 終了処理 (Exit) ---
-pg.quit()
+pygame.quit()
 sys.exit()
 
