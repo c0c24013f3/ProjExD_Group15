@@ -274,6 +274,7 @@ class Explosion(pygame.sprite.Sprite):
                 self.image = self.frames[self.current_frame]
                 self.rect = self.image.get_rect(center=center)
 
+# 大ボスクラス
 class FinalEnemy(pygame.sprite.Sprite):
     def __init__(self, x: int, y: int):
         self.x = x
