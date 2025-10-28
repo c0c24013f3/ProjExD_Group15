@@ -1,11 +1,14 @@
-import pygame
-import sys
+import os
+import pygame as pg
 import random
+import sys
 
 # --- 定数 (Constants) ---
 SCREEN_WIDTH = 600
-SCREEN_HEIGHT = 800
+SCREEN_HEIGHT = 600
 FPS = 60
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # 色 (Colors)
 WHITE = (255, 255, 255)
@@ -17,28 +20,29 @@ YELLOW = (255, 255, 0) # 弾の色 (Bullet color)
 CYAN = (0, 255, 255)   # プレイヤーの色 (Player color)
 
 # --- プレイヤー クラス (Player Class) ---
-class Player(pygame.sprite.Sprite):
+class Player(pg.sprite.Sprite):
     def __init__(self):
         super().__init__()
         # プレイヤーの画像 (三角形) を作成
-        self.image = pygame.Surface((30, 40))
-        self.image.set_colorkey(BLACK) # 黒を透明色に
-        pygame.draw.polygon(self.image, CYAN, [(15, 0), (0, 40), (30, 40)])
+        koukaton_img = pg.image.load("fig/koukaton.png")
+        self.image = pg.transform.scale(koukaton_img, (10, 10))
+        # self.image.set_colorkey(BLACK) # 黒を透明色に
+        # pygame.draw.polygon(self.image, CYAN, [(15, 0), (0, 40), (30, 40)])
         
         self.rect = self.image.get_rect()
         self.rect.centerx = SCREEN_WIDTH // 2
         self.rect.bottom = SCREEN_HEIGHT - 30
         self.speed_x = 0
         self.shoot_delay = 250 # 弾の発射間隔 (ミリ秒)
-        self.last_shot = pygame.time.get_ticks()
+        self.last_shot = pg.time.get_ticks()
 
     def update(self):
         # 左右の移動 (Left/Right movement)
         self.speed_x = 0
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]:
+        keys = pg.key.get_pressed()
+        if keys[pg.K_LEFT]:
             self.speed_x = -7
-        if keys[pygame.K_RIGHT]:
+        if keys[pg.K_RIGHT]:
             self.speed_x = 7
         
         self.rect.x += self.speed_x
@@ -51,7 +55,7 @@ class Player(pygame.sprite.Sprite):
 
     def shoot(self, all_sprites, bullets_group):
         """弾を発射する"""
-        now = pygame.time.get_ticks()
+        now = pg.time.get_ticks()
         if now - self.last_shot > self.shoot_delay:
             self.last_shot = now
             bullet = Bullet(self.rect.centerx, self.rect.top)
@@ -59,13 +63,13 @@ class Player(pygame.sprite.Sprite):
             bullets_group.add(bullet)
 
 # --- 敵 クラス (Enemy Class) ---
-class Enemy(pygame.sprite.Sprite):
+class Enemy(pg.sprite.Sprite):
     def __init__(self, speed_level=0): # スピードレベルを受け取る
         super().__init__()
         # 敵の画像 (円) を作成
-        self.image = pygame.Surface((25, 25))
+        self.image = pg.Surface((25, 25))
         self.image.set_colorkey(BLACK)
-        pygame.draw.circle(self.image, RED, (12, 12), 12)
+        pg.draw.circle(self.image, RED, (12, 12), 12)
         
         self.rect = self.image.get_rect()
         self.rect.x = random.randrange(0, SCREEN_WIDTH - self.rect.width)
@@ -93,10 +97,10 @@ class Enemy(pygame.sprite.Sprite):
             self.kill()
 
 # --- 弾 クラス (Bullet Class) ---
-class Bullet(pygame.sprite.Sprite):
+class Bullet(pg.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
-        self.image = pygame.Surface((5, 15))
+        self.image = pg.Surface((5, 15))
         self.image.fill(YELLOW)
         self.rect = self.image.get_rect()
         self.rect.bottom = y
@@ -128,7 +132,7 @@ def draw_stars(surface, stars, speed_level=0): # スピードレベルを受け�
     
     for star in stars:
         # 星を描画 (star[3] = size)
-        pygame.draw.circle(surface, WHITE, (star[0], star[1]), star[3])
+        pg.draw.circle(surface, WHITE, (star[0], star[1]), star[3])
         # 星を下に移動 (star[2] = speed)
         star[1] += star[2] * speed_modifier
         
@@ -138,28 +142,28 @@ def draw_stars(surface, stars, speed_level=0): # スピードレベルを受け�
             star[0] = random.randrange(0, SCREEN_WIDTH)
 
 # --- ゲームの初期化 (Game Initialization) ---
-pygame.init()
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Xevious Style Shooter")
-clock = pygame.time.Clock()
+pg.init()
+screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pg.display.set_caption("Xevious Style Shooter")
+clock = pg.time.Clock()
 
 # 背景用の星を作成
 stars = create_stars(100)
 
 # --- スプライトグループの作成 (Sprite Groups) ---
-all_sprites = pygame.sprite.Group()
-enemies_group = pygame.sprite.Group()
-bullets_group = pygame.sprite.Group()
+all_sprites = pg.sprite.Group()
+enemies_group = pg.sprite.Group()
+bullets_group = pg.sprite.Group()
 
 # プレイヤーの作成
 player = Player()
 all_sprites.add(player)
 
 # 敵を定期的に生成するためのカスタムイベント
-ADD_ENEMY = pygame.USEREVENT + 1
+ADD_ENEMY = pg.USEREVENT + 1
 initial_spawn_rate = 500 # 最初のスポーンレート
 current_spawn_rate = initial_spawn_rate
-pygame.time.set_timer(ADD_ENEMY, current_spawn_rate) # 1000ミリ秒 (1秒) ごとに敵を生成
+pg.time.set_timer(ADD_ENEMY, current_spawn_rate) # 1000ミリ秒 (1秒) ごとに敵を生成
 
 # スコアとゲームレベル
 score = 0
@@ -172,8 +176,8 @@ while running:
     clock.tick(FPS)
 
     # 2. イベント処理 (Event handling)
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+    for event in pg.event.get():
+        if event.type == pg.QUIT:
             running = False
         elif event.type == ADD_ENEMY:
             # 敵を生成 (現在のゲームレベルを渡す)
@@ -182,8 +186,8 @@ while running:
             enemies_group.add(new_enemy)
 
     # 射撃 (スペースキーが押され続けているかチェック)
-    keys = pygame.key.get_pressed()
-    if keys[pygame.K_SPACE]:
+    keys = pg.key.get_pressed()
+    if keys[pg.K_SPACE]:
         player.shoot(all_sprites, bullets_group)
 
     # 3. 更新 (Update)
@@ -191,7 +195,7 @@ while running:
 
     # 4. 衝突判定 (Collision Detection)
     # 弾と敵の衝突
-    hits = pygame.sprite.groupcollide(bullets_group, enemies_group, True, True)
+    hits = pg.sprite.groupcollide(bullets_group, enemies_group, True, True)
     # True, True は弾も敵も両方消すという意味
     
     enemies_destroyed_this_frame = 0
@@ -212,13 +216,13 @@ while running:
             # 敵の出現頻度を上げる（スポーン間隔を短くする）
             # レベルが上がるごとにスポーン間隔を 0.9 倍にする
             current_spawn_rate = max(150, int(initial_spawn_rate * (0.9 ** game_speed_level))) # 最低150ms
-            pygame.time.set_timer(ADD_ENEMY, 0) # 既存のタイマーをキャンセル
-            pygame.time.set_timer(ADD_ENEMY, current_spawn_rate) # 新しいタイマーを設定
+            pg.time.set_timer(ADD_ENEMY, 0) # 既存のタイマーをキャンセル
+            pg.time.set_timer(ADD_ENEMY, current_spawn_rate) # 新しいタイマーを設定
             print(f"New Spawn Rate: {current_spawn_rate} ms")
 
     
     # プレイヤーと敵の衝突
-    player_hits = pygame.sprite.spritecollide(player, enemies_group, False) # ぶつかった敵のリスト
+    player_hits = pg.sprite.spritecollide(player, enemies_group, False) # ぶつかった敵のリスト
     if player_hits:
         # プレイヤーが敵に当たったらゲームオーバー
         print("Game Over!")
@@ -230,9 +234,9 @@ while running:
     all_sprites.draw(screen) # 全てのスプライトを描画
 
     # 6. 画面のフリップ (Flip display)
-    pygame.display.flip()
+    pg.display.flip()
 
 # --- 終了処理 (Exit) ---
-pygame.quit()
+pg.quit()
 sys.exit()
 
