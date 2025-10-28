@@ -90,13 +90,13 @@ class Player(pygame.sprite.Sprite):
         self.hidden = False # ゲームオーバー時の非表示フラグ
 
         # 通常ショット用
-        self.shoot_delay = 2 # ★変更: 200 -> 250------------------------------------------------------------------------------------------------------------
+        self.shoot_delay = 250 # ★変更: 200 -> 250
         self.last_shot = pygame.time.get_ticks()
 
         # ★追加: チャージショット用
         self.is_charging = False
         self.charge_start_time = 0
-        self.charge_max_time = 500 # チャージ最大時間 (2000ms = 2秒)
+        self.charge_max_time = 1000 # チャージ最大時間 (2000ms = 2秒)
         self.charge_value = 0 # 現在のチャージ量
 
     def update(self, keys, all_sprites, bullets_group, charge_bullets_group): # ★引数追加
@@ -214,7 +214,7 @@ class Enemy(pygame.sprite.Sprite):
 
 
         self.health = 1 # 通常の敵の体力
-        self.score_value = 1000000 # 倒したときのスコア
+        self.score_value = 1 # 倒したときのスコア
 
     def update(self):
         # まっすぐ下に移動
@@ -260,7 +260,7 @@ class PlayerBullet(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
         # beam.png をスケーリングし、左に90度回転させる
-        raw_image = pygame.transform.scale(PLAYER_BULLET_IMAGE, (25, 10005))
+        raw_image = pygame.transform.scale(PLAYER_BULLET_IMAGE, (25, 15))
         # 90度回転 (左向き)
         self.image = pygame.transform.rotate(raw_image, 90) 
         self.rect = self.image.get_rect()
@@ -279,7 +279,7 @@ class PlayerChargeShot(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
         # 元のビーム画像を大きくスケーリング
-        raw_image = pygame.transform.scale(PLAYER_BULLET_IMAGE, (30, 60))
+        raw_image = pygame.transform.scale(PLAYER_BULLET_IMAGE, (120, 60))
         # 左に90度回転
         self.image = pygame.transform.rotate(raw_image, 90)
         
@@ -307,7 +307,7 @@ class EnemyBullet(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
         # beam.png をスケーリングし、右に90度回転させる
-        raw_image = pygame.transform.scale(ENEMY_BULLET_IMAGE, (15, 10))
+        raw_image = pygame.transform.scale(ENEMY_BULLET_IMAGE, (30, 15))
         # -90度回転 (右向き)
         raw_image_rotated = pygame.transform.rotate(raw_image, -90)
         self.image = raw_image_rotated.copy() # 元の画像を直接いじらないようにコピー
@@ -544,7 +544,7 @@ while running:
                 
         # レベルアップ処理
         if enemies_destroyed_this_frame > 0:
-            new_speed_level = score // 1#------------------------------------------------------------------------------------------------------------------
+            new_speed_level = score // 10
             if new_speed_level > game_speed_level:
                 game_speed_level = new_speed_level
                 print(f"--- SPEED LEVEL UP! Level: {game_speed_level} ---")
