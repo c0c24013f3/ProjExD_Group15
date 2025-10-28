@@ -1,6 +1,13 @@
 import pygame
 import sys
 import random
+import os # osモジュールをインポート
+import math # 角度計算のために math をインポート
+import pygame as pg
+
+# --- スクリプトのパスを基準にディレクトリを設定 ---
+script_dir = os.path.dirname(os.path.abspath(__file__))
+fig_dir = os.path.join(script_dir, "fig")
 
 # --- 定数 (Constants) ---
 SCREEN_WIDTH = 600
@@ -10,30 +17,84 @@ FPS = 60
 # 色 (Colors)
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
-RED = (255, 0, 0)     # 敵の色 (Enemy color)
-GREEN = (0, 255, 0)
-BLUE = (0, 0, 255)
-YELLOW = (255, 255, 0) # 弾の色 (Bullet color)
-CYAN = (0, 255, 255)   # プレイヤーの色 (Player color)
+RED = (255, 0, 0)     
+YELLOW = (255, 255, 0) 
+
+# --- ゲームの初期化 (Game Initialization) ---
+# ★★重要: 画像をロードする前に初期化と画面設定を完了させます★★
+pygame.init()
+pygame.font.init() 
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Xevious Style Shooter")
+clock = pygame.time.Clock()
+
+
+# --- 画像ファイルの読み込み (Load Images) ---
+if not os.path.exists(fig_dir):
+    os.makedirs(fig_dir)
+    print(f"Warning: '{fig_dir}' directory not found. Created an empty one.")
+    print("Please place 'koukaton.png', 'enemy.png', 'beam.png' and explosion frames (e.g., 'explosion_00.png', 'explosion_01.png'...) inside 'fig' folder.")
+
+try:
+    PLAYER_IMAGE = pygame.image.load(os.path.join(fig_dir, "koukaton.png")).convert_alpha()
+    ENEMY_IMAGE = pygame.image.load(os.path.join(fig_dir, "enemy.png")).convert_alpha()
+    # プレイヤーの弾も beam.png を読み込むようにする
+    PLAYER_BULLET_IMAGE = pygame.image.load(os.path.join(fig_dir, "beam.png")).convert_alpha() 
+    ENEMY_BULLET_IMAGE = pygame.image.load(os.path.join(fig_dir, "beam.png")).convert_alpha()
+    ####IWA画像の読み込み####
+    IWA_IMAGE = pygame.image.load(os.path.join(fig_dir, "iwa_01.png")).convert_alpha()
+    
+    # explosion.gif のアニメーションフレームを読み込む
+    EXPLOSION_FRAMES = []
+    # 例えば explosion_00.png, explosion_01.png, ... のように連番で保存されていると仮定
+    for i in range(10): # 例として10フレーム (explosion_00.png から explosion_09.png)
+        frame_filename = os.path.join(fig_dir, f"explosion_{i:02d}.png")
+        if os.path.exists(frame_filename):
+            EXPLOSION_FRAMES.append(pygame.image.load(frame_filename).convert_alpha())
+        else:
+            # フレームが見つからない場合、単一のgifファイルを読むか、エラーにする
+            # 今回は単一のgifファイルを読み込み、後でそれを使うようにフォールバックする
+            print(f"Warning: Explosion frame {frame_filename} not found. Trying to load explosion.gif as a single image.")
+            try:
+                single_explosion_image = pygame.image.load(os.path.join(fig_dir, "explosion.gif")).convert_alpha()
+                EXPLOSION_FRAMES = [single_explosion_image] # 単一フレームとしてセット
+            except pygame.error as gif_e:
+                print(f"Error loading explosion.gif: {gif_e}")
+            break # 最初のフレームが見つからない時点でループを抜ける
+            
+    if not EXPLOSION_FRAMES: # 何も読み込めなかった場合
+        print("Warning: No explosion images (frames or gif) found. Using a fallback red circle.")
+        # フォールバックとして赤い円を作成
+        fallback_image = pygame.Surface((60, 60), pygame.SRCALPHA)
+        pygame.draw.circle(fallback_image, RED, (30, 30), 30)
+        EXPLOSION_FRAMES = [fallback_image]
+
+except pygame.error as e:
+    print(f"Error loading image: {e}")
+    if "cannot convert without pygame.display initialized" in str(e):
+        print("Pygame display was not initialized before image conversion.")
+    print("Make sure 'koukaton.png', 'enemy.png', 'beam.png' and explosion frames (e.g., 'explosion_00.png', 'explosion_01.png'...) or 'explosion.gif' exist in 'fig' folder.")
+    pygame.quit() 
+    sys.exit() 
+
 
 # --- プレイヤー クラス (Player Class) ---
 class Player(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
-        # プレイヤーの画像 (三角形) を作成
-        self.image = pygame.Surface((30, 40))
-        self.image.set_colorkey(BLACK) # 黒を透明色に
-        pygame.draw.polygon(self.image, CYAN, [(15, 0), (0, 40), (30, 40)])
-        
+        self.image = pygame.transform.scale(PLAYER_IMAGE, (40, 40)) 
         self.rect = self.image.get_rect()
         self.rect.centerx = SCREEN_WIDTH // 2
         self.rect.bottom = SCREEN_HEIGHT - 30
         self.speed_x = 0
-        self.shoot_delay = 250 # 弾の発射間隔 (ミリ秒)
+        self.shoot_delay = 200 
         self.last_shot = pygame.time.get_ticks()
+        self.hidden = False 
 
     def update(self):
-        # 左右の移動 (Left/Right movement)
+        if self.hidden:
+            return
+
         self.speed_x = 0
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT]:
@@ -43,127 +104,268 @@ class Player(pygame.sprite.Sprite):
         
         self.rect.x += self.speed_x
         
-        # 画面端の処理 (Screen boundary check)
         if self.rect.right > SCREEN_WIDTH:
             self.rect.right = SCREEN_WIDTH
         if self.rect.left < 0:
             self.rect.left = 0
 
     def shoot(self, all_sprites, bullets_group):
-        """弾を発射する"""
+        if self.hidden:
+            return
+            
         now = pygame.time.get_ticks()
         if now - self.last_shot > self.shoot_delay:
             self.last_shot = now
-            bullet = Bullet(self.rect.centerx, self.rect.top)
+            bullet = PlayerBullet(self.rect.centerx, self.rect.top) 
             all_sprites.add(bullet)
             bullets_group.add(bullet)
 
+    def hide(self):
+        self.hidden = True
+        self.kill() 
+
+
 # --- 敵 クラス (Enemy Class) ---
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self, speed_level=0): # スピードレベルを受け取る
+    # player_ref を引数に追加
+    def __init__(self, speed_level=0, all_sprites_ref=None, enemy_bullets_group_ref=None, player_ref=None):
         super().__init__()
-        # 敵の画像 (円) を作成
-        self.image = pygame.Surface((25, 25))
-        self.image.set_colorkey(BLACK)
-        pygame.draw.circle(self.image, RED, (12, 12), 12)
-        
+        self.image = pygame.transform.scale(ENEMY_IMAGE, (40, 40)) 
         self.rect = self.image.get_rect()
         self.rect.x = random.randrange(0, SCREEN_WIDTH - self.rect.width)
         self.rect.y = random.randrange(-100, -40)
         
-        # スピードレベルに基づいて速度を計算
         base_speed_min = 2
         base_speed_max = 5
-        # 難易度レベルごとに速度を少し上げる
         speed_increase = speed_level * 0.4 
         min_speed = int(base_speed_min + speed_increase)
         max_speed = int(base_speed_max + speed_increase)
-        
-        # 速度が同じにならないように、最低でも1の範囲を持たせる
         if max_speed <= min_speed:
             max_speed = min_speed + 1
             
-        self.speed_y = random.randrange(min_speed, max_speed) # 落下速度
+        self.speed_y = random.randrange(min_speed, max_speed) 
+
+        self.all_sprites = all_sprites_ref 
+        self.enemy_bullets_group = enemy_bullets_group_ref 
+        self.enemy_shoot_delay = random.randrange(1000, 2500) # 1秒〜2.5秒に変更
+        self.last_shot = pygame.time.get_ticks()
+        self.player = player_ref # プレイヤーへの参照を保存
+
+        self.health = 1 
+        self.score_value = 1 
 
     def update(self):
-        # まっすぐ下に移動
         self.rect.y += self.speed_y
-        # 画面外に出たら削除
         if self.rect.top > SCREEN_HEIGHT + 10:
             self.kill()
 
-# --- 弾 クラス (Bullet Class) ---
-class Bullet(pygame.sprite.Sprite):
+        self.shoot()
+
+    def shoot(self):
+        now = pygame.time.get_ticks()
+        if now - self.last_shot > self.enemy_shoot_delay:
+            self.last_shot = now
+            # EnemyBullet に self.speed_y と self.player を渡す
+            enemy_bullet = EnemyBullet(self.rect.centerx, self.rect.bottom, self.speed_y, self.player) 
+            if self.all_sprites and self.enemy_bullets_group:
+                self.all_sprites.add(enemy_bullet)
+                self.enemy_bullets_group.add(enemy_bullet)
+
+    def hit(self):
+        self.health -= 1
+        if self.health <= 0:
+            return True 
+        return False 
+    
+
+####岩の仮コード####
+class Iwa(pygame.sprite.Sprite):
+    def __init__(self, speed_level=0, all_sprites_ref=None):
+        super().__init__()
+        self.image = pygame.transform.scale(IWA_IMAGE, (100, 100))
+        self.rect = self.image.get_rect()
+        self.rect.x = random.randrange(0, SCREEN_WIDTH - self.rect.width)
+        self.rect.y = random.randrange(-100, -40)
+
+        base_speed_min = 40
+        base_speed_max = 50
+        speed_increase = speed_level * 0.4 
+        min_speed = int(base_speed_min + speed_increase)
+        max_speed = int(base_speed_max + speed_increase)
+        if max_speed <= min_speed:
+            max_speed = min_speed + 1
+        self.speed_y = random.randrange(min_speed, max_speed)
+        self.all_sprites = all_sprites_ref
+
+        def update(self):
+            self.rect.y += self.speed_y
+            if self.rect.top > SCREEN_HEIGHT + 10:
+                self.kill()
+
+
+# --- プレイヤー弾 クラス (Player Bullet Class) ---
+class PlayerBullet(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
-        self.image = pygame.Surface((5, 15))
-        self.image.fill(YELLOW)
+        # beam.png をスケーリングし、上下反転させる
+        # 元画像をリサイズ (敵の弾と合わせる)
+        raw_image = pygame.transform.scale(PLAYER_BULLET_IMAGE, (15, 15))
+        # Y軸(垂直)方向に反転させて上向きにする
+        self.image = pygame.transform.flip(raw_image, False, True) 
         self.rect = self.image.get_rect()
         self.rect.bottom = y
         self.rect.centerx = x
-        self.speed_y = -10 # 上に移動
+        self.speed_y = -10 
 
     def update(self):
         self.rect.y += self.speed_y
-        # 画面外に出たら削除
         if self.rect.bottom < 0:
             self.kill()
 
+
+# --- 敵のビーム クラス (Enemy Bullet Class) ---
+class EnemyBullet(pygame.sprite.Sprite):
+    # enemy_speed_y と player_obj を引数に追加
+    def __init__(self, x, y, enemy_speed_y, player_obj):
+        super().__init__()
+        self.image = pygame.transform.scale(ENEMY_BULLET_IMAGE, (15, 15)) 
+        self.rect = self.image.get_rect()
+        self.rect.top = y
+        self.rect.centerx = x
+        
+        # --- プレイヤーへの方向と速度を計算 ---
+        
+        # 1. ターゲット座標を設定
+        target_x, target_y = self.rect.centerx, self.rect.bottom + 100 # デフォルト（真下）
+        if player_obj and not player_obj.hidden:
+            # プレイヤーが有効なら、プレイヤーの中心を狙う
+            target_x = player_obj.rect.centerx
+            target_y = player_obj.rect.centery
+
+        # 2. 差分（ベクトル）を計算
+        dx = target_x - self.rect.centerx
+        dy = target_y - self.rect.centery
+        
+        # 3. 距離を計算 (math.hypot は 0 除算を回避するのに便利)
+        distance = math.hypot(dx, dy)
+        
+        # 4. (要件1) 速度を計算 (敵機の2.5倍、ただし最低速度は7)
+        total_speed = max(7.0, enemy_speed_y * 2.5)
+
+        # 5. (要件2) 速度ベクトルを計算
+        if distance == 0:
+            # ターゲットが真上（あり得ないが念のため）なら真下に撃つ
+            self.speed_x = 0
+            self.speed_y = total_speed
+        else:
+            # ベクトルを正規化 (長さを1に) してから速度を掛ける
+            self.speed_x = (dx / distance) * total_speed
+            self.speed_y = (dy / distance) * total_speed
+        # --- 計算ここまで ---
+
+    def update(self):
+        # 浮動小数点数で座標を更新（より滑らかになる）
+        self.rect.x += self.speed_x
+        self.rect.y += self.speed_y
+        # 画面外に出たら削除
+        if self.rect.top > SCREEN_HEIGHT or self.rect.bottom < 0 or self.rect.left > SCREEN_WIDTH or self.rect.right < 0:
+            self.kill()
+
+
+# --- 爆発エフェクト クラス (Explosion Class) ---
+class Explosion(pygame.sprite.Sprite):
+    def __init__(self, center, size="normal"):
+        super().__init__()
+        self.frames = EXPLOSION_FRAMES
+        
+        if size == "large":
+            # 大きな爆発の場合、フレームを大きくスケール
+            self.frames = [pygame.transform.scale(f, (90, 90)) for f in self.frames]
+            self.frame_rate = 100 # フレーム表示速度 (ミリ秒)
+        else:
+            self.frames = [pygame.transform.scale(f, (60, 60)) for f in self.frames]
+            self.frame_rate = 70 # フレーム表示速度 (ミリ秒)
+
+        self.current_frame = 0
+        self.image = self.frames[self.current_frame]
+        self.rect = self.image.get_rect(center=center)
+        self.last_update = pygame.time.get_ticks()
+
+    def update(self):
+        now = pygame.time.get_ticks()
+        if now - self.last_update > self.frame_rate:
+            self.last_update = now
+            self.current_frame += 1
+            if self.current_frame >= len(self.frames):
+                self.kill() # 全フレーム表示したら消滅
+            else:
+                center = self.rect.center # 中心座標を保持
+                self.image = self.frames[self.current_frame]
+                self.rect = self.image.get_rect(center=center)
+
+
 # --- 星（背景）の管理 (Star Background Management) ---
 def create_stars(number):
-    """指定された数の星のリストを作成する"""
     stars = []
     for _ in range(number):
         star_x = random.randrange(0, SCREEN_WIDTH)
         star_y = random.randrange(0, SCREEN_HEIGHT)
-        star_speed = random.randrange(1, 4) # 星の速度 (1, 2, 3)
-        star_size = random.randrange(1, 4)  # 星のサイズ (1, 2, 3)
-        stars.append([star_x, star_y, star_speed, star_size]) # [x, y, speed, size]
+        star_speed = random.randrange(1, 4) 
+        star_size = random.randrange(1, 4)  
+        stars.append([star_x, star_y, star_speed, star_size]) 
     return stars
 
-def draw_stars(surface, stars, speed_level=0): # スピードレベルを受け取る
-    """星を描画し、スクロールさせる"""
-    # スピードレベルに応じて背景のスクロール速度も上げる
+def draw_stars(surface, stars, speed_level=0): 
     speed_modifier = 1.0 + speed_level * 0.15 
     
     for star in stars:
-        # 星を描画 (star[3] = size)
         pygame.draw.circle(surface, WHITE, (star[0], star[1]), star[3])
-        # 星を下に移動 (star[2] = speed)
         star[1] += star[2] * speed_modifier
         
-        # 画面外に出たら、上に戻す
         if star[1] > SCREEN_HEIGHT:
             star[1] = 0
             star[0] = random.randrange(0, SCREEN_WIDTH)
 
-# --- ゲームの初期化 (Game Initialization) ---
-pygame.init()
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Xevious Style Shooter")
-clock = pygame.time.Clock()
+# --- テキスト描画用のヘルパー関数 (Helper function for drawing text) ---
+def draw_text(surface, text, font, color, x, y, align="topright"):
+    text_surface = font.render(text, True, color) 
+    text_rect = text_surface.get_rect()
+    if align == "topright":
+        text_rect.topright = (x, y) 
+    elif align == "center":
+        text_rect.center = (x, y) 
+    elif align == "topleft":
+        text_rect.topleft = (x, y) 
+    surface.blit(text_surface, text_rect)
 
-# 背景用の星を作成
+# --- フォントの設定 ---
+score_font = pygame.font.SysFont(None, 36) 
+game_over_font = pygame.font.SysFont(None, 64, bold=True) 
+
+# --- 背景用の星を作成 ---
 stars = create_stars(100)
 
 # --- スプライトグループの作成 (Sprite Groups) ---
 all_sprites = pygame.sprite.Group()
-enemies_group = pygame.sprite.Group()
-bullets_group = pygame.sprite.Group()
+enemies_group = pygame.sprite.Group() 
+player_bullets_group = pygame.sprite.Group() 
+enemy_bullets_group = pygame.sprite.Group()
+iwa_group = pygame.sprite.Group() ####iwaグループ####
 
-# プレイヤーの作成
+# --- プレイヤーの作成 ---
 player = Player()
 all_sprites.add(player)
 
-# 敵を定期的に生成するためのカスタムイベント
+# --- 敵を定期的に生成するためのカスタムイベント ---
 ADD_ENEMY = pygame.USEREVENT + 1
-initial_spawn_rate = 500 # 最初のスポーンレート
+initial_spawn_rate = 1000 
 current_spawn_rate = initial_spawn_rate
-pygame.time.set_timer(ADD_ENEMY, current_spawn_rate) # 1000ミリ秒 (1秒) ごとに敵を生成
+pygame.time.set_timer(ADD_ENEMY, current_spawn_rate) 
 
-# スコアとゲームレベル
+# --- スコアとゲームレベル ---
 score = 0
 game_speed_level = 0
+game_over = False
 
 # --- メインゲームループ (Main Game Loop) ---
 running = True
@@ -175,59 +377,107 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        elif event.type == ADD_ENEMY:
-            # 敵を生成 (現在のゲームレベルを渡す)
-            new_enemy = Enemy(game_speed_level)
+        elif event.type == ADD_ENEMY and not game_over:
+            # Enemy生成時に player オブジェクトを渡す
+            new_enemy = Enemy(game_speed_level, all_sprites, enemy_bullets_group, player)
             all_sprites.add(new_enemy)
             enemies_group.add(new_enemy)
+            ####iwa生成####
+            new_iwa = Iwa(game_speed_level, all_sprites)
+            all_sprites.add(new_iwa)
+            iwa_group.add(new_iwa)
 
     # 射撃 (スペースキーが押され続けているかチェック)
     keys = pygame.key.get_pressed()
-    if keys[pygame.K_SPACE]:
-        player.shoot(all_sprites, bullets_group)
+    if keys[pygame.K_SPACE] and not game_over:
+        player.shoot(all_sprites, player_bullets_group)
 
     # 3. 更新 (Update)
-    all_sprites.update()
+    if not game_over:
+        all_sprites.update()
+        iwa_group.update()
+    else:
+        # ゲームオーバー後も爆発エフェクトは更新する
+        # explosionオブジェクトがkillされるまでupdateを続ける
+        for sprite in all_sprites:
+             if isinstance(sprite, Explosion):
+                sprite.update()
 
     # 4. 衝突判定 (Collision Detection)
-    # 弾と敵の衝突
-    hits = pygame.sprite.groupcollide(bullets_group, enemies_group, True, True)
-    # True, True は弾も敵も両方消すという意味
-    
-    enemies_destroyed_this_frame = 0
-    # 複数の弾が同時に当たった場合もカウントするため
-    for bullet, enemies_hit in hits.items():
-        enemies_destroyed_this_frame += len(enemies_hit)
+    if not game_over:
         
-    if enemies_destroyed_this_frame > 0:
-        score += enemies_destroyed_this_frame
-        print(f"Score: {score}")
-        
-        # 10機倒すごとにレベルアップ
-        new_speed_level = score // 10
-        if new_speed_level > game_speed_level:
-            game_speed_level = new_speed_level
-            print(f"--- SPEED LEVEL UP! Level: {game_speed_level} ---")
-            
-            # 敵の出現頻度を上げる（スポーン間隔を短くする）
-            # レベルが上がるごとにスポーン間隔を 0.9 倍にする
-            current_spawn_rate = max(150, int(initial_spawn_rate * (0.9 ** game_speed_level))) # 最低150ms
-            pygame.time.set_timer(ADD_ENEMY, 0) # 既存のタイマーをキャンセル
-            pygame.time.set_timer(ADD_ENEMY, current_spawn_rate) # 新しいタイマーを設定
-            print(f"New Spawn Rate: {current_spawn_rate} ms")
+        enemies_destroyed_this_frame = 0 
 
-    
-    # プレイヤーと敵の衝突
-    player_hits = pygame.sprite.spritecollide(player, enemies_group, False) # ぶつかった敵のリスト
-    if player_hits:
-        # プレイヤーが敵に当たったらゲームオーバー
-        print("Game Over!")
-        running = False
+        # プレイヤーの弾と敵の衝突
+        hits_normal = pygame.sprite.groupcollide(player_bullets_group, enemies_group, True, False) 
+        for bullet, enemies_hit in hits_normal.items():
+            for enemy_hit in enemies_hit:
+                if enemy_hit.hit(): 
+                    explosion = Explosion(enemy_hit.rect.center, "normal")
+                    all_sprites.add(explosion)
+                    score += enemy_hit.score_value
+                    enemies_destroyed_this_frame += 1
+                    enemy_hit.kill() 
+                
+        # レベルアップ処理
+        if enemies_destroyed_this_frame > 0:
+            new_speed_level = score // 10
+            if new_speed_level > game_speed_level:
+                game_speed_level = new_speed_level
+                print(f"--- SPEED LEVEL UP! Level: {game_speed_level} ---")
+                
+                current_spawn_rate = max(150, int(initial_spawn_rate * (0.9 ** game_speed_level))) 
+                pygame.time.set_timer(ADD_ENEMY, 0) 
+                pygame.time.set_timer(ADD_ENEMY, current_spawn_rate) 
+                print(f"New Spawn Rate: {current_spawn_rate} ms")
+
+        # プレイヤーと敵の衝突
+        player_enemy_hits = pygame.sprite.spritecollide(player, enemies_group, True) 
+        
+        if player_enemy_hits:
+            explosion = Explosion(player.rect.center, "large") 
+            all_sprites.add(explosion)
+            player.hide() 
+            game_over = True
+            print("Game Over! (Collided with enemy)")
+            pygame.time.set_timer(ADD_ENEMY, 0)
+
+        ####プレイヤーと岩の衝突判定####
+        player_iwa_hits = pygame.sprite.spritecollide(player, iwa_group, True) 
+        
+        if player_iwa_hits:
+            explosion = Explosion(player.rect.center, "large") 
+            all_sprites.add(explosion)
+            player.hide() 
+            game_over = True
+            print("Game Over! (Collided with rock)")
+            pygame.time.set_timer(ADD_ENEMY, 0)
+
+        # プレイヤーと敵のビームの衝突
+        player_beam_hits = pygame.sprite.spritecollide(player, enemy_bullets_group, True) 
+        if player_beam_hits:
+            explosion = Explosion(player.rect.center, "normal") 
+            all_sprites.add(explosion)
+            player.hide() 
+            game_over = True
+            print("Game Over! (Hit by enemy beam)")
+            pygame.time.set_timer(ADD_ENEMY, 0) 
+
 
     # 5. 描画 (Draw / Render)
-    screen.fill(BLACK) # 画面を黒で塗りつぶす
-    draw_stars(screen, stars, game_speed_level) # 星空を描画 (スピードレベルを渡す)
-    all_sprites.draw(screen) # 全てのスプライトを描画
+    screen.fill(BLACK) 
+    draw_stars(screen, stars, game_speed_level) 
+    all_sprites.draw(screen) 
+
+    # スコアを描画
+    draw_text(screen, f"SCORE: {score}", score_font, WHITE, SCREEN_WIDTH - 10, 10, align="topright")
+    
+    # レベルを描画
+    draw_text(screen, f"LEVEL: {game_speed_level}", score_font, WHITE, 10, 10, align="topleft")
+
+    # ゲームオーバー表示
+    if game_over:
+        draw_text(screen, "GAME OVER", game_over_font, RED, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, align="center")
 
     # 6. 画面のフリップ (Flip display)
     pygame.display.flip()
