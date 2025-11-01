@@ -187,20 +187,20 @@ class Iwa(pygame.sprite.Sprite):
         self.rect.x = random.randrange(0, SCREEN_WIDTH - self.rect.width)
         self.rect.y = random.randrange(-100, -40)
 
-        base_speed_min = 40
-        base_speed_max = 50
+        base_speed_min = 10
+        base_speed_max = 20
         speed_increase = speed_level * 0.4 
         min_speed = int(base_speed_min + speed_increase)
         max_speed = int(base_speed_max + speed_increase)
         if max_speed <= min_speed:
             max_speed = min_speed + 1
-        self.speed_y = random.randrange(min_speed, max_speed)
+        self.speed_y = random.randrange(min_speed, max_speed)      
         self.all_sprites = all_sprites_ref
 
-        def update(self):
-            self.rect.y += self.speed_y
-            if self.rect.top > SCREEN_HEIGHT + 10:
-                self.kill()
+    def update(self):
+        self.rect.y += self.speed_y
+        if self.rect.top > SCREEN_HEIGHT + 10:
+            self.kill()
 
 
 # --- プレイヤー弾 クラス (Player Bullet Class) ---
@@ -350,7 +350,9 @@ all_sprites = pygame.sprite.Group()
 enemies_group = pygame.sprite.Group() 
 player_bullets_group = pygame.sprite.Group() 
 enemy_bullets_group = pygame.sprite.Group()
-iwa_group = pygame.sprite.Group() ####iwaグループ####
+####iwaグループ####
+iwa_group = pygame.sprite.Group() 
+
 
 # --- プレイヤーの作成 ---
 player = Player()
@@ -360,7 +362,8 @@ all_sprites.add(player)
 ADD_ENEMY = pygame.USEREVENT + 1
 initial_spawn_rate = 1000 
 current_spawn_rate = initial_spawn_rate
-pygame.time.set_timer(ADD_ENEMY, current_spawn_rate) 
+pygame.time.set_timer(ADD_ENEMY, current_spawn_rate)
+
 
 # --- スコアとゲームレベル ---
 score = 0
@@ -380,11 +383,11 @@ while running:
         elif event.type == ADD_ENEMY and not game_over:
             # Enemy生成時に player オブジェクトを渡す
             new_enemy = Enemy(game_speed_level, all_sprites, enemy_bullets_group, player)
-            all_sprites.add(new_enemy)
-            enemies_group.add(new_enemy)
+            all_sprites.add(new_enemy)#敵機生成に必要
+            enemies_group.add(new_enemy)#衝突判定を行うのに必要
             ####iwa生成####
             new_iwa = Iwa(game_speed_level, all_sprites)
-            all_sprites.add(new_iwa)
+            all_sprites.add(new_iwa)#岩の生成に必要
             iwa_group.add(new_iwa)
 
     # 射撃 (スペースキーが押され続けているかチェック)
@@ -395,7 +398,6 @@ while running:
     # 3. 更新 (Update)
     if not game_over:
         all_sprites.update()
-        iwa_group.update()
     else:
         # ゲームオーバー後も爆発エフェクトは更新する
         # explosionオブジェクトがkillされるまでupdateを続ける
@@ -433,7 +435,6 @@ while running:
 
         # プレイヤーと敵の衝突
         player_enemy_hits = pygame.sprite.spritecollide(player, enemies_group, True) 
-        
         if player_enemy_hits:
             explosion = Explosion(player.rect.center, "large") 
             all_sprites.add(explosion)
@@ -442,9 +443,8 @@ while running:
             print("Game Over! (Collided with enemy)")
             pygame.time.set_timer(ADD_ENEMY, 0)
 
-        ####プレイヤーと岩の衝突判定####
+        ###プレイヤーと岩の衝突判定####
         player_iwa_hits = pygame.sprite.spritecollide(player, iwa_group, True) 
-        
         if player_iwa_hits:
             explosion = Explosion(player.rect.center, "large") 
             all_sprites.add(explosion)
