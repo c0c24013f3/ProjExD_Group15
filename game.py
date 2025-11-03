@@ -2,7 +2,6 @@ import pygame
 import sys
 import random
 import os
-# import math # 角度計算が不要になったため削除
 
 # --- スクリプトのパスを基準にディレクトリを設定 ---
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -16,13 +15,12 @@ FPS = 60
 # 色 (Colors)
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
-RED = (255, 0, 0)     
+RED = (255, 50, 50)     
 YELLOW = (255, 255, 0)
-GREEN = (0, 255, 0) # チャージゲージ用
-GRAY = (100, 100, 100) # チャージゲージ背景用
+GREEN = (0, 255, 0) 
+GRAY = (100, 100, 100) 
 
 # --- ゲームの初期化 (Game Initialization) ---
-# 画像ロード前に初期化と画面設定を完了させる
 pygame.init()
 pygame.font.init() 
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -231,12 +229,12 @@ class Enemy(pygame.sprite.Sprite):
             self.all_sprites.add(enemy_bullet)
             self.enemy_bullets_group.add(enemy_bullet)
 
-    def shoot_debug(self):
-        """デバッグ用: 強制的にビームを発射する（タイマー無視）"""
-        enemy_bullet = EnemyBullet(self.rect.centerx, self.rect.bottom) 
-        self.all_sprites.add(enemy_bullet)
-        self.enemy_bullets_group.add(enemy_bullet)
-        # print("DEBUG: Enemy forced to shoot.")
+    # def shoot_debug(self):
+    #     """デバッグ用: 強制的にビームを発射する（タイマー無視）"""
+    #     enemy_bullet = EnemyBullet(self.rect.centerx, self.rect.bottom) 
+    #     self.all_sprites.add(enemy_bullet)
+    #     self.enemy_bullets_group.add(enemy_bullet)
+    #     # print("DEBUG: Enemy forced to shoot.")
 
     def hit(self):
         """弾が当たった時の処理"""
@@ -274,7 +272,7 @@ class PlayerChargeShot(pygame.sprite.Sprite):
         
         # 色を黄色に変更 (BLEND_RGBA_MULT)
         color_surface = pygame.Surface(self.image.get_size(), pygame.SRCALPHA)
-        color_surface.fill(YELLOW)
+        color_surface.fill(RED)
         self.image.blit(color_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MULT) 
 
         self.rect = self.image.get_rect()
@@ -298,9 +296,9 @@ class EnemyBullet(pygame.sprite.Sprite):
         raw_image_rotated = pygame.transform.rotate(raw_image, -90)
         self.image = raw_image_rotated.copy() # .copy() で元画像保護
         
-        # 色を赤に変更 (BLEND_RGBA_MULT)
+        # 色を変更 (BLEND_RGBA_MULT)
         color_surface = pygame.Surface(self.image.get_size(), pygame.SRCALPHA)
-        color_surface.fill(RED)
+        color_surface.fill(YELLOW)
         self.image.blit(color_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
         
         self.rect = self.image.get_rect()
@@ -451,7 +449,8 @@ pygame.time.set_timer(ADD_ENEMY, current_spawn_rate) # (ms) ごとにイベン�
 score = 0
 game_speed_level = 0
 game_over = False
-game_over_time = None # ゲームオーバーになった時刻を記録
+game_over_time = None 
+level_up_message_time =0
 
 # --- メインゲームループ (Main Game Loop) ---
 running = True
@@ -464,12 +463,12 @@ while running:
         if event.type == pygame.QUIT:
             running = False
         
-        # Enterキーでのデバッグ発射
-        elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_RETURN:
-                print("DEBUG: Enter pressed. Forcing all enemies to shoot.")
-                for enemy in enemies_group:
-                    enemy.shoot_debug()
+        # # Enterキーでのデバッグ発射
+        # elif event.type == pygame.KEYDOWN:
+        #     if event.key == pygame.K_RETURN:
+        #         print("DEBUG: Enter pressed. Forcing all enemies to shoot.")
+        #         for enemy in enemies_group:
+        #             enemy.shoot_debug()
         
         elif event.type == ADD_ENEMY and not game_over:
             new_enemy = Enemy(game_speed_level, all_sprites, enemy_bullets_group)
@@ -499,23 +498,22 @@ while running:
         enemies_destroyed_this_frame = 0 
 
         # プレイヤーの(通常)弾と敵の衝突
-        # (弾:True は消える, 敵:False はまだ消えない)
-        hits_normal = pygame.sprite.groupcollide(player_bullets_group, enemies_group, True, False) 
+        hits_normal = pygame.sprite.groupcollide(player_bullets_group, enemies_group, True, False) # 弾は消える、敵はまだ消えない
         for bullet, enemies_hit in hits_normal.items():
             for enemy_hit in enemies_hit:
-                if enemy_hit.hit(): # 敵の体力(hit())が0になったら
+                if enemy_hit.hit(): # hit() が True (体力0) になったら
                     explosion = Explosion(enemy_hit.rect.center, "normal")
                     all_sprites.add(explosion)
                     score += enemy_hit.score_value
                     enemies_destroyed_this_frame += 1
                     enemy_hit.kill() # 敵を消す
         
-        # プレイヤーの(チャージ)弾と敵の衝突
-        # (弾:False は消えない, 敵:False もまだ消えない)
+        # ★追加: プレイヤーの(チャージ)弾と敵の衝突
+        # 弾(False)は消えない、敵(False)もまだ消えない
         charge_hits = pygame.sprite.groupcollide(player_charge_bullets_group, enemies_group, False, False) 
         for bullet, enemies_hit in charge_hits.items():
             for enemy_hit in enemies_hit:
-                if enemy_hit.hit(): # 敵の体力(hit())が0になったら
+                if enemy_hit.hit(): # hit() が True (体力0) になったら
                     explosion = Explosion(enemy_hit.rect.center, "normal")
                     all_sprites.add(explosion)
                     score += enemy_hit.score_value
@@ -529,6 +527,8 @@ while running:
                 game_speed_level = new_speed_level
                 print(f"--- SPEED LEVEL UP! Level: {game_speed_level} ---")
                 
+                level_up_message_time = pygame.time.get_ticks() # ★追加: メッセージ表示開始時刻を記録
+                
                 # スポーンレートを計算（レベルごとに90%に減少、最低150ms）
                 current_spawn_rate = max(150, int(initial_spawn_rate * (0.9 ** game_speed_level))) 
                 pygame.time.set_timer(ADD_ENEMY, 0) # 古いタイマーをクリア
@@ -539,7 +539,7 @@ while running:
         player_enemy_hits = pygame.sprite.spritecollide(player, enemies_group, True) # 敵は消える
         
         if player_enemy_hits:
-            if not game_over: # 最初のゲームオーバー時のみ時刻を記録
+            if not game_over: # ★追加: 最初のゲームオーバー時のみ時刻を記録
                 game_over_time = pygame.time.get_ticks()
             explosion = Explosion(player.rect.center, "large") # プレイヤーはやられたら大きな爆発
             all_sprites.add(explosion)
@@ -551,7 +551,7 @@ while running:
         # プレイヤーと敵のビームの衝突
         player_beam_hits = pygame.sprite.spritecollide(player, enemy_bullets_group, True) # ビームは消す
         if player_beam_hits:
-            if not game_over: # 最初のゲームオーバー時のみ時刻を記録
+            if not game_over: # ★追加: 最初のゲームオーバー時のみ時刻を記録
                 game_over_time = pygame.time.get_ticks()
             explosion = Explosion(player.rect.center, "normal") # ビームなら通常の爆発
             all_sprites.add(explosion)
@@ -575,6 +575,16 @@ while running:
     # チャージゲージを描画 (プレイヤーが生存中のみ)
     if not player.hidden:
         draw_charge_gauge(screen, player.charge_value, player.charge_max_time, player.rect.bottom)
+
+         # メッセージ描画と自動終了判定のための現在時刻
+    now = pygame.time.get_ticks()
+
+    # ★追加: レベルアップメッセージを描画
+    if now - level_up_message_time < 1000: # 1秒間表示
+        # ゲームオーバーメッセージと重ならないようにする
+        if not game_over: 
+            draw_text(screen, "LEVEL UP!", game_over_font, YELLOW, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, align="center")
+
 
     # ゲームオーバー表示
     if game_over:
