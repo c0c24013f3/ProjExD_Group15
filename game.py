@@ -441,7 +441,6 @@ while running:
 
             pygame.time.set_timer(ADD_ENEMY, 0)
             boss_spawned = True
-            print("bsktkr!!!bsktkr!!!")
 
     # 3. 更新 (Update)
     if not game_over:
