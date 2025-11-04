@@ -182,13 +182,13 @@ class Enemy(pygame.sprite.Sprite):
 class Iwa(pygame.sprite.Sprite):
     def __init__(self, speed_level=0, all_sprites_ref=None):
         super().__init__()
-        self.image = pygame.transform.scale(IWA_IMAGE, (100, 100))
+        self.image = pygame.transform.scale(IWA_IMAGE, (115, 115))
         self.rect = self.image.get_rect()
         self.rect.x = random.randrange(0, SCREEN_WIDTH - self.rect.width)
         self.rect.y = random.randrange(-100, -40)
 
-        base_speed_min = 10
-        base_speed_max = 20
+        base_speed_min = 5
+        base_speed_max = 13
         speed_increase = speed_level * 0.4 
         min_speed = int(base_speed_min + speed_increase)
         max_speed = int(base_speed_max + speed_increase)
@@ -350,9 +350,7 @@ all_sprites = pygame.sprite.Group()
 enemies_group = pygame.sprite.Group() 
 player_bullets_group = pygame.sprite.Group() 
 enemy_bullets_group = pygame.sprite.Group()
-####iwaグループ####
-iwa_group = pygame.sprite.Group() 
-
+iwa_group = pygame.sprite.Group() ####iwaグループ####
 
 # --- プレイヤーの作成 ---
 player = Player()
@@ -363,7 +361,6 @@ ADD_ENEMY = pygame.USEREVENT + 1
 initial_spawn_rate = 1000 
 current_spawn_rate = initial_spawn_rate
 pygame.time.set_timer(ADD_ENEMY, current_spawn_rate)
-
 
 # --- スコアとゲームレベル ---
 score = 0
@@ -443,7 +440,7 @@ while running:
             print("Game Over! (Collided with enemy)")
             pygame.time.set_timer(ADD_ENEMY, 0)
 
-        ###プレイヤーと岩の衝突判定####
+        ####プレイヤーと岩の衝突判定####
         player_iwa_hits = pygame.sprite.spritecollide(player, iwa_group, True) 
         if player_iwa_hits:
             explosion = Explosion(player.rect.center, "large") 
