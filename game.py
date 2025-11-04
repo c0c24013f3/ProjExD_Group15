@@ -272,6 +272,78 @@ class Explosion(pygame.sprite.Sprite):
                 self.image = self.frames[self.current_frame]
                 self.rect = self.image.get_rect(center=center)
 
+# --- 敵 クラス (Enemy Class) --- ... (既存のコード) ...
+
+# --- ボス敵 クラス (Boss Enemy Class) ---
+class BossEnemy(pygame.sprite.Sprite):
+    """
+    ボスのステータスと挙動に関するクラス
+    pygame.sprite.Spriteを継承
+    """
+    def __init__(self, all_sprites_ref=None, enemy_bullets_group_ref=None, player_ref=None):
+        """
+        引数1,all_sprites_ref: 全てのspriteのグループ
+        引数2,enemy_bullets_group: player
+        引数3,player_ref: ボスの弾のspriteのグループ
+        """
+        super().__init__()
+        # プレイヤーの画像と敵の画像を流用 (適宜変更が必要な場合はファイルを準備してください)
+        try:
+            # fig/final_enemy.png の画像ファイル名を読み込む
+            BOSS_IMAGE = pygame.image.load(os.path.join(fig_dir, "final_enemy.png")).convert_alpha()
+        except pygame.error:
+            # ファイルがない場合は、敵画像を流用するか、エラー処理を行う
+            BOSS_IMAGE = ENEMY_IMAGE 
+            print("Warning: 'final_enemy.png' not found. Using 'enemy.png' as fallback for Boss.")
+            
+        self.image = pygame.transform.scale(BOSS_IMAGE, (150, 150)) 
+        self.rect = self.image.get_rect()
+        self.rect.centerx = SCREEN_WIDTH // 2 # 画面上部の固定位置に配置
+        self.rect.top = 20  # 画面上部から少し下げた位置
+        
+        self.all_sprites = all_sprites_ref 
+        self.enemy_bullets_group = enemy_bullets_group_ref 
+        self.player = player_ref 
+
+        self.health = 50       # ライフを50に設定
+        self.score_value = 50  # 撃破時のスコア
+        
+        self.is_active = False # ボスがアクティブになるまで攻撃しない
+        
+        # ボスの射撃間隔を短く設定 (例: 500ミリ秒)
+        self.boss_shoot_delay = 500
+        self.last_shot = pygame.time.get_ticks()
+
+        # ボスは動かない
+        self.speed_y = 0 
+
+    def update(self):
+        # 画面上部に固定するため、移動処理は不要
+        
+        if self.is_active:
+            self.shoot()
+            
+    def shoot(self):
+        now = pygame.time.get_ticks()
+        if now - self.last_shot > self.boss_shoot_delay:
+            self.last_shot = now
+            # EnemyBullet に self.speed_y (0) と self.player を渡す
+            # ボスビームは、敵の移動速度ではなく、固定の最低速度(7)が適用される
+            enemy_bullet = EnemyBullet(self.rect.centerx - 20, self.rect.bottom, self.speed_y, self.player) 
+            enemy_bullet_2 = EnemyBullet(self.rect.centerx + 20, self.rect.bottom, self.speed_y, self.player) 
+            if self.all_sprites and self.enemy_bullets_group:
+                self.all_sprites.add(enemy_bullet)
+                self.enemy_bullets_group.add(enemy_bullet)
+                self.all_sprites.add(enemy_bullet_2) # 2発同時に撃つ
+                self.enemy_bullets_group.add(enemy_bullet_2)
+
+    def hit(self):
+        self.health -= 1
+        if self.health <= 0:
+            return True # 撃墜
+        return False # 健在
+
+# --- プレイヤー弾 クラス (Player Bullet Class) --- ... (既存のコード) ...
 
 # --- 星（背景）の管理 (Star Background Management) ---
 def create_stars(number):
@@ -335,7 +407,13 @@ score = 0
 game_speed_level = 0
 game_over = False
 
+# ボス関連の変数 #
+boss = None
+BOSS_SPAWN_TIME = 30000
+boss_spawned = False
+
 # --- メインゲームループ (Main Game Loop) ---
+start_time = pygame.time.get_ticks() #  ゲーム開始時刻を記録
 running = True
 while running:
     # 1. フレームレートの制御 (Control frame rate)
@@ -356,6 +434,17 @@ while running:
     if keys[pygame.K_SPACE] and not game_over:
         player.shoot(all_sprites, player_bullets_group)
 
+    # ボスの出現をチェック #
+    if not game_over and not boss_spawned:
+        current_time = pygame.time.get_ticks()
+        if current_time - start_time >= BOSS_SPAWN_TIME:
+            boss = BossEnemy(all_sprites, enemy_bullets_group, player)
+            all_sprites.add(boss)
+            enemies_group.add(boss)
+
+            pygame.time.set_timer(ADD_ENEMY, 0)
+            boss_spawned = True
+
     # 3. 更新 (Update)
     if not game_over:
         all_sprites.update()
@@ -368,6 +457,9 @@ while running:
 
     # 4. 衝突判定 (Collision Detection)
     if not game_over:
+
+        if boss and not boss.is_active and boss_spawned:
+            boss.is_active = True
         
         enemies_destroyed_this_frame = 0 
 
