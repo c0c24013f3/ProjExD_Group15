@@ -40,7 +40,10 @@ try:
     ENEMY_IMAGE = pygame.image.load(os.path.join(fig_dir, "enemy.png")).convert_alpha()
     PLAYER_BULLET_IMAGE = pygame.image.load(os.path.join(fig_dir, "beam.png")).convert_alpha()
     ENEMY_BULLET_IMAGE = pygame.image.load(os.path.join(fig_dir, "beam.png")).convert_alpha()
-    
+    ####IWA画像の読み込み####
+    IWA_IMAGE = pygame.image.load(os.path.join(fig_dir, "iwa_01.png")).convert_alpha()
+
+
     try:
         BOSS_IMAGE = pygame.image.load(os.path.join(fig_dir, "boss.png")).convert_alpha()
     except pygame.error:
@@ -229,7 +232,7 @@ class Enemy(pygame.sprite.Sprite):
 
     def shoot(self):
         """敵がビームを発射する（連射ディレイあり）"""
-        
+         
 
         now = pygame.time.get_ticks()
         if now - self.last_shot > self.enemy_shoot_delay:
@@ -322,6 +325,31 @@ class BigEnemy(Enemy):
     # (元々ここに 424行目～442行目のコードがありましたが、削除しました)
     
 # --- ★★★ 変更点ここまで ★★★ ---
+
+
+####岩の最終コード####
+class Iwa(pygame.sprite.Sprite):
+    def __init__(self, speed_level=0, all_sprites_ref=None):
+        super().__init__()
+        self.image = pygame.transform.scale(IWA_IMAGE, (100, 100))
+        self.rect = self.image.get_rect()
+        self.rect.x = random.randrange(0, SCREEN_WIDTH - self.rect.width)
+        self.rect.y = random.randrange(-100, -40)
+
+        base_speed_min = 5
+        base_speed_max = 9
+        speed_increase = speed_level * 0.4 
+        min_speed = int(base_speed_min + speed_increase)
+        max_speed = int(base_speed_max + speed_increase)
+        if max_speed <= min_speed:
+            max_speed = min_speed + 1
+        self.speed_y = random.randrange(min_speed, max_speed)      
+        self.all_sprites = all_sprites_ref
+
+    def update(self):
+        self.rect.y += self.speed_y
+        if self.rect.top > SCREEN_HEIGHT + 10:
+            self.kill()
 
 
 # --- プレイヤー弾クラス ---
@@ -540,6 +568,7 @@ enemies_group = pygame.sprite.Group()
 player_bullets_group = pygame.sprite.Group()
 player_charge_bullets_group = pygame.sprite.Group() # チャージショット用
 enemy_bullets_group = pygame.sprite.Group()
+iwa_group = pygame.sprite.Group() ####iwaグループ####
 
 player = Player()
 all_sprites.add(player)
@@ -580,6 +609,12 @@ while running:
             new_enemy = Enemy(game_speed_level, all_sprites, enemy_bullets_group)
             all_sprites.add(new_enemy)
             enemies_group.add(new_enemy)
+
+            ####iwa生成####
+            new_iwa = Iwa(game_speed_level, all_sprites)
+            all_sprites.add(new_iwa)#岩の生成に必要
+            iwa_group.add(new_iwa)
+
 
     keys = pygame.key.get_pressed()
 
@@ -689,6 +724,16 @@ while running:
             player.hide()
             game_over = True
             pygame.time.set_timer(ADD_ENEMY, 0) # 敵の出現を停止
+
+         ####プレイヤーと岩の衝突判定####
+        player_iwa_hits = pygame.sprite.spritecollide(player, iwa_group, True) 
+        if player_iwa_hits:
+            explosion = Explosion(player.rect.center, "large") 
+            all_sprites.add(explosion)
+            player.hide() 
+            game_over = True
+            print("Game Over! (Collided with rock)")
+            pygame.time.set_timer(ADD_ENEMY, 0)
 
 
     # 5. 描画
