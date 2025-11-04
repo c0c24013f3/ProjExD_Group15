@@ -331,13 +331,13 @@ class BigEnemy(Enemy):
 class Iwa(pygame.sprite.Sprite):
     def __init__(self, speed_level=0, all_sprites_ref=None):
         super().__init__()
-        self.image = pygame.transform.scale(IWA_IMAGE, (100, 100))
+        self.image = pygame.transform.scale(IWA_IMAGE, (50, 50))
         self.rect = self.image.get_rect()
         self.rect.x = random.randrange(0, SCREEN_WIDTH - self.rect.width)
         self.rect.y = random.randrange(-100, -40)
 
-        base_speed_min = 5
-        base_speed_max = 9
+        base_speed_min = 3
+        base_speed_max = 5
         speed_increase = speed_level * 0.4 
         min_speed = int(base_speed_min + speed_increase)
         max_speed = int(base_speed_max + speed_increase)
