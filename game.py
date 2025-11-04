@@ -278,24 +278,29 @@ class Explosion(pygame.sprite.Sprite):
 
 # --- ボス敵 クラス (Boss Enemy Class) ---
 class BossEnemy(pygame.sprite.Sprite):
+    """
+    ボスのステータスと挙動に関するクラス
+    pygame.sprite.Spriteを継承
+    """
     def __init__(self, all_sprites_ref=None, enemy_bullets_group_ref=None, player_ref=None):
+        """
+        引数1,all_sprites_ref: 全てのspriteのグループ
+        引数2,enemy_bullets_group: player
+        引数3,player_ref: ボスの弾のspriteのグループ
+        """
         super().__init__()
         # プレイヤーの画像と敵の画像を流用 (適宜変更が必要な場合はファイルを準備してください)
         try:
-            # fig/final_enemy.png の画像ファイル名を読み込む (仮に BOSS_IMAGE を定義)
-            # **注意:** 実際にはゲームの初期化部分で BOSS_IMAGE をロードする必要があります
+            # fig/final_enemy.png の画像ファイル名を読み込む
             BOSS_IMAGE = pygame.image.load(os.path.join(fig_dir, "final_enemy.png")).convert_alpha()
         except pygame.error:
             # ファイルがない場合は、敵画像を流用するか、エラー処理を行う
             BOSS_IMAGE = ENEMY_IMAGE 
             print("Warning: 'final_enemy.png' not found. Using 'enemy.png' as fallback for Boss.")
             
-        # サイズを大きくスケール
         self.image = pygame.transform.scale(BOSS_IMAGE, (150, 150)) 
         self.rect = self.image.get_rect()
-        
-        # 画面上部の固定位置に配置
-        self.rect.centerx = SCREEN_WIDTH // 2
+        self.rect.centerx = SCREEN_WIDTH // 2 # 画面上部の固定位置に配置
         self.rect.top = 20  # 画面上部から少し下げた位置
         
         self.all_sprites = all_sprites_ref 
