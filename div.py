@@ -19,6 +19,7 @@ RED = (255, 50, 50)
 YELLOW = (255, 255, 0)
 GREEN = (0, 255, 0)
 GRAY = (100, 100, 100)
+BOSS_GREEN = (0, 150, 50) 
 
 # --- ゲームの初期化 ---
 pygame.init()
@@ -39,6 +40,16 @@ try:
     ENEMY_IMAGE = pygame.image.load(os.path.join(fig_dir, "enemy.png")).convert_alpha()
     PLAYER_BULLET_IMAGE = pygame.image.load(os.path.join(fig_dir, "beam.png")).convert_alpha()
     ENEMY_BULLET_IMAGE = pygame.image.load(os.path.join(fig_dir, "beam.png")).convert_alpha()
+    ####IWA画像の読み込み####
+    IWA_IMAGE = pygame.image.load(os.path.join(fig_dir, "iwa_01.png")).convert_alpha()
+
+
+    try:
+        BOSS_IMAGE = pygame.image.load(os.path.join(fig_dir, "boss.png")).convert_alpha()
+    except pygame.error:
+        print("Warning: 'boss.png' not found. Using a fallback green rectangle.")
+        BOSS_IMAGE = pygame.Surface((120, 100))
+        BOSS_IMAGE.fill(BOSS_GREEN)
 
     # 爆発エフェクトの連番フレームを読み込む (例: explosion_00.png, 01.png...)
     EXPLOSION_FRAMES = []
@@ -47,9 +58,7 @@ try:
         if os.path.exists(frame_filename):
             EXPLOSION_FRAMES.append(pygame.image.load(frame_filename).convert_alpha())
         else:
-            # 連番が途切れた時点でループを抜ける
             if i == 0:
-                # 最初のフレームすらない場合、explosion.gif にフォールバック
                 print(f"Warning: Explosion frame {frame_filename} not found. Trying 'explosion.gif'.")
                 try:
                     single_explosion_image = pygame.image.load(os.path.join(fig_dir, "explosion.gif")).convert_alpha()
@@ -60,7 +69,6 @@ try:
 
     if not EXPLOSION_FRAMES: # 何も読み込めなかった場合
         print("Warning: No explosion images found. Using a fallback red circle.")
-        # 代替として赤い円を作成
         fallback_image = pygame.Surface((60, 60), pygame.SRCALPHA)
         pygame.draw.circle(fallback_image, RED, (30, 30), 30)
         EXPLOSION_FRAMES = [fallback_image]
@@ -201,9 +209,11 @@ class Enemy(pygame.sprite.Sprite):
             max_speed = min_speed + 1
 
         self.speed_y = random.randrange(min_speed, max_speed)
-
+        
+        # --- ★★★ クラッシュ回避に必須 ★★★ ---
         self.all_sprites = all_sprites_ref
         self.enemy_bullets_group = enemy_bullets_group_ref
+        # --- ★★★★★★★★★★★★★★★★ ---
 
         self.enemy_shoot_delay = 2500 # (ms)
         # 最初の発射タイミングをずらす
@@ -222,10 +232,13 @@ class Enemy(pygame.sprite.Sprite):
 
     def shoot(self):
         """敵がビームを発射する（連射ディレイあり）"""
+         
+
         now = pygame.time.get_ticks()
         if now - self.last_shot > self.enemy_shoot_delay:
             self.last_shot = now
-            enemy_bullet = EnemyBullet(self.rect.centerx, self.rect.bottom)
+            # ★★★ 修正点1で差し替えたため、 EnemyBullet は speed_y_val と player_ref を省略可能 ★★★
+            enemy_bullet = EnemyBullet(self.rect.centerx, self.rect.bottom) 
             self.all_sprites.add(enemy_bullet)
             self.enemy_bullets_group.add(enemy_bullet)
 
@@ -235,6 +248,109 @@ class Enemy(pygame.sprite.Sprite):
         if self.health <= 0:
             return True # 破壊された
         return False # まだ生きている
+
+# --- ★★★ ボスクラス ★★★ ---
+class BigEnemy(Enemy):
+    """
+    でかい敵（ボス）クラス。
+    Enemyを継承し、体力、サイズ、移動パターン、射撃頻度を変更する。
+    """
+    # 修正点 1: __init__ で player_ref を受け取る
+    def __init__(self, speed_level=0, all_sprites_ref=None, enemy_bullets_group_ref=None, player_ref=None):
+        
+        # --- ★★★ クラッシュ回避に最重要 ★★★ ---
+        super().__init__(speed_level, all_sprites_ref, enemy_bullets_group_ref)
+        # --- ★★★★★★★★★★★★★★★★★★★★ ---
+
+        # 修正点 2: プレイヤーへの参照を保存
+        self.player = player_ref 
+
+        self.image = pygame.transform.scale(BOSS_IMAGE, (120, 100))
+        self.rect = self.image.get_rect()
+        self.rect.x = (SCREEN_WIDTH - self.rect.width) // 2
+        self.rect.y = -self.rect.height 
+
+        self.speed_y = 1  # 降りてくる速度
+        self.speed_x = 3
+        self.target_y = 100 
+
+        self.health = 30 
+        self.score_value = 50 
+
+        self.enemy_shoot_delay = 1000 # 射撃頻度
+        self.last_shot = pygame.time.get_ticks()
+
+    def update(self):
+        """ボス専用の移動パターンと射撃"""
+        
+        if self.rect.y < self.target_y:
+            self.rect.y += self.speed_y
+        else:
+            self.rect.x += self.speed_x
+            if self.rect.left < 0 or self.rect.right > SCREEN_WIDTH:
+                self.speed_x *= -1 
+                self.rect.x += self.speed_x 
+
+        # 下で定義したホーミング弾用の射撃メソッドを呼ぶ
+        self.shoot() 
+
+        if self.rect.top > SCREEN_HEIGHT + 10:
+            self.kill()
+
+    # 修正点 3: shoot メソッドを上書き (オーバーライド)
+    def shoot(self):
+        """敵がホーミングビームを発射する"""
+        
+        if not self.all_sprites or not self.enemy_bullets_group:
+            return
+
+        now = pygame.time.get_ticks()
+        if now - self.last_shot > self.enemy_shoot_delay:
+            self.last_shot = now
+            
+            bullet_speed_y = 10 
+            
+            # ★★★ 修正点1で差し替えた EnemyBullet を呼び出す ★★★
+            # 左の弾 (ホーミング)
+            bullet_left = EnemyBullet(self.rect.centerx - 40, self.rect.bottom, bullet_speed_y, self.player)
+            # 右の弾 (ホーミング)
+            bullet_right = EnemyBullet(self.rect.centerx + 40, self.rect.bottom, bullet_speed_y, self.player)
+            
+            self.all_sprites.add(bullet_left)
+            self.all_sprites.add(bullet_right)
+            self.enemy_bullets_group.add(bullet_left)
+            self.enemy_bullets_group.add(bullet_right)
+
+    # --- ★★★ 修正点2: 重複していた2つ目の update メソッドを削除 ★★★ ---
+    # (元々ここに 424行目～442行目のコードがありましたが、削除しました)
+    
+# --- ★★★ 変更点ここまで ★★★ ---
+
+
+####岩の最終コード####
+class Iwa(pygame.sprite.Sprite):
+    def __init__(self, speed_level=0, all_sprites_ref=None):
+        super().__init__()
+        self.image = pygame.transform.scale(IWA_IMAGE, (100, 100))
+        self.rect = self.image.get_rect()
+        self.rect.x = random.randrange(0, SCREEN_WIDTH - self.rect.width)
+        self.rect.y = random.randrange(-100, -40)
+
+        base_speed_min = 5
+        base_speed_max = 9
+        speed_increase = speed_level * 0.4 
+        min_speed = int(base_speed_min + speed_increase)
+        max_speed = int(base_speed_max + speed_increase)
+        if max_speed <= min_speed:
+            max_speed = min_speed + 1
+        self.speed_y = random.randrange(min_speed, max_speed)      
+        self.all_sprites = all_sprites_ref
+
+    def update(self):
+        self.rect.y += self.speed_y
+        if self.rect.top > SCREEN_HEIGHT + 10:
+            self.kill()
+
 
 # --- プレイヤー弾クラス ---
 class PlayerBullet(pygame.sprite.Sprite):
@@ -277,10 +393,15 @@ class PlayerChargeShot(pygame.sprite.Sprite):
             self.kill()
 
 
-# --- 敵のビームクラス ---
+# --- ★★★ 修正点1: EnemyBullet クラスを完全に差し替え ★★★ ---
 class EnemyBullet(pygame.sprite.Sprite):
-    """敵の弾。下にまっすぐ飛ぶ。"""
-    def __init__(self, x, y):
+    """
+    敵の弾。
+    player_ref が渡された場合は、プレイヤーを狙うホーミング弾になる。
+    """
+    
+    # __init__ の引数を変更 (speed_y_val と player_ref を受け取れるようにする)
+    def __init__(self, x, y, speed_y_val=7, player_ref=None):
         super().__init__()
         raw_image = pygame.transform.scale(ENEMY_BULLET_IMAGE, (30, 15))
         raw_image_rotated = pygame.transform.rotate(raw_image, -90)
@@ -295,14 +416,41 @@ class EnemyBullet(pygame.sprite.Sprite):
         self.rect.top = y
         self.rect.centerx = x
 
-        self.speed_y = 7
+        # 速度とプレイヤー参照を設定
+        self.speed_y = speed_y_val # 渡されたY速度を使用 (デフォルト 7)
         self.speed_x = 0
+        self.player = player_ref   # プレイヤーへの参照
+
+        # ホーミング弾ロジック (発射時に一度だけ狙う)
+        # プレイヤーが渡され、かつ隠れていない場合
+        if self.player and not self.player.hidden:
+            dx = self.player.rect.centerx - self.rect.centerx
+            dy = self.player.rect.centery - self.rect.centery
+            
+            # プレイヤーがボスより下にいる場合のみホーミング
+            if dy > 0:
+                try:
+                    # Y速度 (self.speed_y) を基準にX速度を計算
+                    self.speed_x = (dx / dy) * self.speed_y
+                except ZeroDivisionError:
+                    self.speed_x = 0
+                    
+                # X速度が速すぎないように制限 (Y速度の1.5倍まで)
+                max_speed_x = self.speed_y * 1.5
+                self.speed_x = max(-max_speed_x, min(self.speed_x, max_speed_x))
+            # (プレイヤーが上にいる場合は、そのまま (speed_x=0) まっすぐ下に撃つ)
 
     def update(self):
+        # 発射時に計算された速度でまっすぐ飛ぶ
         self.rect.y += self.speed_y
         self.rect.x += self.speed_x
-        if self.rect.top > SCREEN_HEIGHT:
+        
+        # 画面外 (上下左右) に出たら削除
+        if self.rect.top > SCREEN_HEIGHT or self.rect.bottom < 0 or \
+           self.rect.left > SCREEN_WIDTH or self.rect.right < 0:
             self.kill()
+# --- ★★★ 修正点1 ここまで ★★★ ---
+
 
 # --- 爆発エフェクトクラス ---
 class Explosion(pygame.sprite.Sprite):
@@ -410,6 +558,7 @@ def draw_charge_gauge(surface, current_charge, max_charge, player_bottom_y):
 # --- フォントの設定 ---
 score_font = pygame.font.SysFont(None, 36)
 game_over_font = pygame.font.SysFont(None, 64, bold=True)
+boss_warning_font = pygame.font.SysFont(None, 72, bold=True) 
 
 # --- ゲーム変数とスプライトグループの準備 ---
 stars = create_stars(100)
@@ -419,6 +568,7 @@ enemies_group = pygame.sprite.Group()
 player_bullets_group = pygame.sprite.Group()
 player_charge_bullets_group = pygame.sprite.Group() # チャージショット用
 enemy_bullets_group = pygame.sprite.Group()
+iwa_group = pygame.sprite.Group() ####iwaグループ####
 
 player = Player()
 all_sprites.add(player)
@@ -436,11 +586,19 @@ game_over = False
 game_over_time = None
 level_up_message_time = 0
 
+# ボス関連の変数
+boss_spawned = False
+boss_spawn_time = 30000 # 30秒 (ms)
+boss_warning_time = 0
+game_start_time = pygame.time.get_ticks() # ゲーム開始時刻を記録
+
 # --- メインゲームループ ---
 running = True
 while running:
     # 1. フレームレートの制御
     clock.tick(FPS)
+    
+    now = pygame.time.get_ticks()
 
     # 2. イベント処理
     for event in pygame.event.get():
@@ -452,6 +610,12 @@ while running:
             all_sprites.add(new_enemy)
             enemies_group.add(new_enemy)
 
+            ####iwa生成####
+            new_iwa = Iwa(game_speed_level, all_sprites)
+            all_sprites.add(new_iwa)#岩の生成に必要
+            iwa_group.add(new_iwa)
+
+
     keys = pygame.key.get_pressed()
 
 
@@ -459,6 +623,30 @@ while running:
     if not game_over:
         # プレイヤーの更新
         player.update(keys, all_sprites, player_bullets_group, player_charge_bullets_group)
+        
+        # ボス出現処理
+        elapsed_time = now - game_start_time
+        
+        # 28秒経過したら警告表示開始
+        if elapsed_time > (boss_spawn_time - 2000) and not boss_spawned and boss_warning_time == 0:
+             boss_warning_time = now
+
+        # 30秒経過したらボス出現
+        if elapsed_time > boss_spawn_time and not boss_spawned:
+            print("--- BOSS SPAWN! ---")
+            
+            # BigEnemy を生成する際、player オブジェクトを渡す
+            boss = BigEnemy(game_speed_level, all_sprites, enemy_bullets_group, player) 
+            
+            all_sprites.add(boss)
+            enemies_group.add(boss) 
+            boss_spawned = True
+            boss_warning_time = 0 
+            
+            # ボスが出たらザコ敵の出現を停止
+            pygame.time.set_timer(ADD_ENEMY, 0)
+            print("Stopping regular enemy spawns.")
+
         # プレイヤー以外のスプライトを更新 (プレイヤーは更新済みなので除外)
         sprites_to_update = [s for s in all_sprites if s != player]
         for sprite in sprites_to_update:
@@ -479,7 +667,10 @@ while running:
         for bullet, enemies_hit in hits_normal.items():
             for enemy_hit in enemies_hit:
                 if enemy_hit.hit(): # 敵の体力が0になったら
-                    explosion = Explosion(enemy_hit.rect.center, "normal")
+                    # ボスを倒した場合は大きな爆発
+                    size = "large" if isinstance(enemy_hit, BigEnemy) else "normal"
+                    explosion = Explosion(enemy_hit.rect.center, size)
+                    
                     all_sprites.add(explosion)
                     score += enemy_hit.score_value
                     enemies_destroyed_this_frame += 1
@@ -490,14 +681,16 @@ while running:
         for bullet, enemies_hit in charge_hits.items():
             for enemy_hit in enemies_hit:
                 if enemy_hit.hit():
-                    explosion = Explosion(enemy_hit.rect.center, "normal")
+                    size = "large" if isinstance(enemy_hit, BigEnemy) else "normal"
+                    explosion = Explosion(enemy_hit.rect.center, size)
+                    
                     all_sprites.add(explosion)
                     score += enemy_hit.score_value
                     enemies_destroyed_this_frame += 1
                     enemy_hit.kill()
 
-        # レベルアップ処理
-        if enemies_destroyed_this_frame > 0:
+        # レベルアップ処理 (ボス出現中はレベルアップしない)
+        if enemies_destroyed_this_frame > 0 and not boss_spawned:
             new_speed_level = score // 10
             if new_speed_level > game_speed_level:
                 game_speed_level = new_speed_level
@@ -532,6 +725,16 @@ while running:
             game_over = True
             pygame.time.set_timer(ADD_ENEMY, 0) # 敵の出現を停止
 
+         ####プレイヤーと岩の衝突判定####
+        player_iwa_hits = pygame.sprite.spritecollide(player, iwa_group, True) 
+        if player_iwa_hits:
+            explosion = Explosion(player.rect.center, "large") 
+            all_sprites.add(explosion)
+            player.hide() 
+            game_over = True
+            print("Game Over! (Collided with rock)")
+            pygame.time.set_timer(ADD_ENEMY, 0)
+
 
     # 5. 描画
     screen.fill(BLACK)
@@ -545,12 +748,16 @@ while running:
     if not player.hidden:
         draw_charge_gauge(screen, player.charge_value, player.charge_max_time, player.rect.bottom)
 
-    now = pygame.time.get_ticks()
-
     # レベルアップメッセージを描画 (1秒間)
     if now - level_up_message_time < 1000:
         if not game_over: # ゲームオーバーと重ならないように
             draw_text(screen, "LEVEL UP!", game_over_font, YELLOW, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, align="center")
+            
+    # ボス警告表示
+    if boss_warning_time > 0 and not game_over:
+        # 点滅処理 (0.5秒ごと)
+        if (now - boss_warning_time) % 1000 < 500:
+             draw_text(screen, "!! WARNING !!", boss_warning_font, RED, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, align="center")
 
     # ゲームオーバー表示
     if game_over:
