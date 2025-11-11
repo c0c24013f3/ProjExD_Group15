@@ -126,7 +126,7 @@ def draw_health_bar(surface, x, y, pct):
     pygame.draw.rect(surface, bar_color, (x, y, fill, BAR_HEIGHT))
     pygame.draw.rect(surface, WHITE, (x, y, BAR_LENGTH, BAR_HEIGHT), 2)
 
-# --- 精灵类 ---
+# プレイヤークラス(精灵类)
 class Player(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
